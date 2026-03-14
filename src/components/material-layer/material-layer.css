@@ -1,0 +1,27 @@
+[data-lk-component="material-layer"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+[data-lk-component="material-layer"] [data-lk-material-sublayer] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+[data-lk-material-type="glass"] [data-lk-material-sublayer="texture"] {
+  --blur-thick: var(--lk-size-lg);
+  --blur-normal: var(--lk-size-md);
+  --blur-thin: var(--lk-size-xs);
+
+  z-index: 1;
+  isolation: isolate;
+}
+
+[data-lk-material-type="glass"] [data-lk-material-sublayer="light"] {
+  mix-blend-mode: soft-light;
+  opacity: 1;
+}
