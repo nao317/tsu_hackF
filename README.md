@@ -6,8 +6,8 @@
 
 - React: フロントエンドの主要なライブラリとして使用されます。
 - TypeScript: 型安全なコードを書くために使用されます。
-- LeftKit: UIコンポーネントライブラリとして使用されます。
-- Web Haptics: フロントエンドで触覚フィードバックを提供するために使用されます。（オプション）
+- [LeftKit](https://www.chainlift.io/liftkit): UIコンポーネントライブラリとして使用されます。
+- [Web Haptics](https://haptics.lochie.me/): フロントエンドで触覚フィードバックを提供するために使用されます。（オプション）
 
 #### ディレクトリ構成
 
