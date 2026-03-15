@@ -1,0 +1,15 @@
+.btn {
+  width: 100%;
+  padding: 14px;
+  background: #00a86b;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.btn:active { transform: translateY(1px); }
+
+@media (prefers-color-scheme: dark) {
+  .btn { background: #28c27f; }
+}
