@@ -11,18 +11,36 @@ import AiSuggestion from "../../components/ai-suggestion";
 import SpeakButton from "../../components/speak-button";
 import styles from "./board.module.css";
 
-function toCardGridItems(cards: Card[]): Array<{
+function getGreeting(hour: number): string {
+  if (hour >= 4 && hour < 11) {
+    return "おはようございます";
+  } else if (hour >= 18 || hour < 4) {
+    return "こんばんは";
+  }
+  return "こんにちは";
+}
+
+function toCardGridItems(
+  cards: Card[],
+  greeting: string = "こんにちは",
+): Array<{
   id: string;
   label: string;
   imageUrl?: string;
 }> {
   return cards
     .filter((card) => card.label.trim().length > 0)
-    .map((card) => ({
-      id: card.id,
-      label: card.label,
-      imageUrl: card.image_url ?? undefined,
-    }));
+    .map((card) => {
+      let label = card.label;
+      if (label === "こんにちは") {
+        label = greeting;
+      }
+      return {
+        id: card.id,
+        label,
+        imageUrl: card.image_url ?? undefined,
+      };
+    });
 }
 
 export default function BoardClient({
@@ -52,9 +70,26 @@ export default function BoardClient({
   );
   const requestIdRef = useRef(0);
 
+  const [greeting, setGreeting] = useState<string>("こんにちは");
+
+  useEffect(() => {
+    let unmounted = false;
+    // ハイドレーション後のクライアントサイドでのみ実行される
+    // setImmediateやsetTimeoutで非同期にすることで同期的なsetState呼び出しの警告を回避
+    setTimeout(() => {
+      if (!unmounted && typeof window !== "undefined") {
+        setGreeting(getGreeting(new Date().getHours()));
+      }
+    }, 0);
+
+    return () => {
+      unmounted = true;
+    };
+  }, []);
+
   const dailyCardItems = useMemo(
-    () => toCardGridItems(dailyCards),
-    [dailyCards],
+    () => toCardGridItems(dailyCards, greeting),
+    [dailyCards, greeting],
   );
 
   useEffect(() => {
@@ -102,8 +137,8 @@ export default function BoardClient({
   }, [locationCards, locationType, userLocationCards]);
 
   const locationCardItems = useMemo(
-    () => toCardGridItems(locationCardsForDisplay),
-    [locationCardsForDisplay],
+    () => toCardGridItems(locationCardsForDisplay, greeting),
+    [locationCardsForDisplay, greeting],
   );
 
   const handleSelect = (label: string) => {
