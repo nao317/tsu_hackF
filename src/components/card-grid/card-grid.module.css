@@ -45,9 +45,13 @@
 }
 .selected {
   outline: 3px solid #2b6df6;
-  box-shadow: 0 0 0 2px rgba(43,109,246,0.12) inset;
+  box-shadow: 0 0 0 2px rgba(43, 109, 246, 0.12) inset;
 }
 
 @media (prefers-color-scheme: dark) {
-  .card { background: #142033; color: #dfefff; border-color: #1f2f44; }
+  .card {
+    background: #142033;
+    color: #dfefff;
+    border-color: #1f2f44;
+  }
 }
