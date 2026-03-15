@@ -37,11 +37,6 @@ function normalizeLocationName(name: string): string {
   return name.replace(/\s+/g, "");
 }
 
-function getLocationLabel(location: Location): string {
-  const trimmed = location.name.trim();
-  return trimmed.length > 0 ? trimmed : location.name;
-}
-
 function findLocationByName(
   locations: Location[],
   name: string,
@@ -100,39 +95,59 @@ export default async function BoardPage({
   const lat = parseCoordinate(getFirstParam(params.lat));
   const lng = parseCoordinate(getFirstParam(params.lng));
   const locationId = getFirstParam(params.locationId);
+  const locationType = getFirstParam(params.locationType);
+  const locationName = getFirstParam(params.locationName);
   const legacyBoard = getFirstParam(params.board);
 
-  const locations = await fetchLocations();
+  let selectedLocationId: string | undefined;
+  let selectedLocationName: string | undefined;
+  let selectedLocationType: "shared" | "user" = "shared";
+  let locationCards: Card[] = [];
 
-  let selectedLocation = locationId
-    ? locations.find((location) => location.id === locationId)
-    : undefined;
+  if (locationType === "user" && locationId) {
+    selectedLocationType = "user";
+    selectedLocationId = locationId;
+    const trimmedLocationName = locationName?.trim();
+    selectedLocationName =
+      trimmedLocationName && trimmedLocationName.length > 0
+        ? trimmedLocationName
+        : "マイロケーション";
+  } else {
+    const locations = await fetchLocations();
 
-  if (!selectedLocation && legacyBoard) {
-    const resolvedName = LEGACY_BOARD_NAME_MAP[legacyBoard] ?? legacyBoard;
-    selectedLocation = findLocationByName(locations, resolvedName);
-  }
+    let selectedLocation = locationId
+      ? locations.find((location) => location.id === locationId)
+      : undefined;
 
-  if (!selectedLocation && lat !== null && lng !== null) {
-    const nearbyLocations = await fetchNearbyLocations(lat, lng);
-    selectedLocation = nearbyLocations[0];
+    if (!selectedLocation && legacyBoard) {
+      const resolvedName = LEGACY_BOARD_NAME_MAP[legacyBoard] ?? legacyBoard;
+      selectedLocation = findLocationByName(locations, resolvedName);
+    }
+
+    if (!selectedLocation && lat !== null && lng !== null) {
+      const nearbyLocations = await fetchNearbyLocations(lat, lng);
+      selectedLocation = nearbyLocations[0];
+
+      if (!selectedLocation) {
+        redirect("/no-location");
+      }
+    }
 
     if (!selectedLocation) {
-      redirect("/no-location");
+      selectedLocation = locations[0];
+    }
+
+    if (selectedLocation) {
+      selectedLocationId = selectedLocation.id;
+      selectedLocationName = selectedLocation.name;
+      locationCards = await fetchLocationCards(selectedLocation.id);
     }
   }
 
-  if (!selectedLocation) {
-    selectedLocation = locations[0];
-  }
-
-  const locationCards = selectedLocation
-    ? await fetchLocationCards(selectedLocation.id)
-    : [];
   const dailyCards = await fetchDailyCards();
 
-  const subtitle = selectedLocation
-    ? `選択ボード: ${getLocationLabel(selectedLocation)}`
+  const subtitle = selectedLocationName
+    ? `選択ボード: ${selectedLocationName}`
     : lat !== null && lng !== null
       ? `現在地: ${lat}, ${lng}`
       : "未指定";
@@ -142,7 +157,9 @@ export default async function BoardPage({
       subtitle={subtitle}
       dailyCards={dailyCards}
       locationCards={locationCards}
-      locationName={selectedLocation?.name}
+      locationId={selectedLocationId}
+      locationType={selectedLocationType}
+      locationName={selectedLocationName}
     />
   );
 }

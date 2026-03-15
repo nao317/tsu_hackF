@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getUserLocationsAction } from "@/actions/locations";
 import type { Location } from "@/actions/types";
+import { callWithAuthRetry } from "@/lib/authApiClient";
+import { getStoredAuthTokens } from "@/lib/authStorage";
 import { getCurrentGpsPosition } from "@/lib/geolocation";
 import styles from "../no-location/no-location.module.css";
 
@@ -10,6 +13,7 @@ type LocationOption = {
   id: string;
   label: string;
   distanceText?: string;
+  source: "nearby" | "user";
 };
 
 function formatDistance(distanceM: number): string {
@@ -19,7 +23,10 @@ function formatDistance(distanceM: number): string {
   return `${Math.round(distanceM)}m`;
 }
 
-function toLocationOptions(locations: Location[]): LocationOption[] {
+function toLocationOptions(
+  locations: Location[],
+  source: "nearby" | "user",
+): LocationOption[] {
   return locations.map((location) => {
     const trimmedName = location.name.trim();
     const distanceM = location.distance_m;
@@ -28,8 +35,27 @@ function toLocationOptions(locations: Location[]): LocationOption[] {
       id: location.id,
       label: trimmedName.length > 0 ? trimmedName : location.name,
       distanceText:
-        typeof distanceM === "number" ? formatDistance(distanceM) : undefined,
+        source === "nearby" && typeof distanceM === "number"
+          ? formatDistance(distanceM)
+          : undefined,
+      source,
     };
+  });
+}
+
+function mergeLocationOptions(
+  nearbyOptions: LocationOption[],
+  userOptions: LocationOption[],
+): LocationOption[] {
+  const merged = [...nearbyOptions, ...userOptions];
+  const seen = new Set<string>();
+
+  return merged.filter((option) => {
+    if (seen.has(option.id)) {
+      return false;
+    }
+    seen.add(option.id);
+    return true;
   });
 }
 
@@ -41,12 +67,41 @@ function toGeolocationErrorMessage(error: unknown): string {
   return "位置情報の取得に失敗しました。";
 }
 
+function toUserLocationErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "独自ロケーションの取得に失敗しました。";
+}
+
+function isAuthMessage(message: string): boolean {
+  return (
+    message.includes("ログイン") ||
+    message.includes("認証") ||
+    message.includes("セッション")
+  );
+}
+
 function buildChangeLocationUrl(latitude: number, longitude: number): string {
   const searchParams = new URLSearchParams({
     lat: String(latitude),
     lng: String(longitude),
   });
   return `/change-location?${searchParams.toString()}`;
+}
+
+function buildBoardUrl(option: LocationOption): string {
+  const searchParams = new URLSearchParams({
+    locationId: option.id,
+  });
+
+  if (option.source === "user") {
+    searchParams.set("locationType", "user");
+    searchParams.set("locationName", option.label);
+  }
+
+  return `/board?${searchParams.toString()}`;
 }
 
 export default function ChangeLocationClient({
@@ -57,12 +112,75 @@ export default function ChangeLocationClient({
   hasCoordinates: boolean;
 }) {
   const router = useRouter();
-  const options = useMemo(() => toLocationOptions(locations), [locations]);
+  const nearbyOptions = useMemo(
+    () =>
+      toLocationOptions(Array.isArray(locations) ? locations : [], "nearby"),
+    [locations],
+  );
+  const [userLocations, setUserLocations] = useState<Location[]>([]);
+  const [isLoadingUserLocations, setIsLoadingUserLocations] = useState(false);
+  const [userLocationsError, setUserLocationsError] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const storedTokens = getStoredAuthTokens();
+    if (!storedTokens) {
+      setUserLocations([]);
+      setUserLocationsError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoadingUserLocations(true);
+    setUserLocationsError(null);
+
+    void (async () => {
+      try {
+        const userLocs = await callWithAuthRetry((accessToken) =>
+          getUserLocationsAction(accessToken),
+        );
+
+        if (!cancelled) {
+          setUserLocations(Array.isArray(userLocs) ? userLocs : []);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setUserLocations([]);
+        const message = toUserLocationErrorMessage(error);
+        setUserLocationsError(isAuthMessage(message) ? null : message);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingUserLocations(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const userOptions = useMemo(
+    () => toLocationOptions(userLocations, "user"),
+    [userLocations],
+  );
+  const options = useMemo(
+    () => mergeLocationOptions(nearbyOptions, userOptions),
+    [nearbyOptions, userOptions],
+  );
   const [selected, setSelected] = useState<string>(options[0]?.id ?? "");
   const [isLocating, setIsLocating] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
-  const nearbyCount = options.filter((option) => option.distanceText).length;
+  const nearbyCount = nearbyOptions.length;
+  const userLocationCount = userOptions.length;
 
   const effectiveSelected = options.some((option) => option.id === selected)
     ? selected
@@ -90,7 +208,15 @@ export default function ChangeLocationClient({
     if (!effectiveSelected) {
       return;
     }
-    router.push(`/board?locationId=${encodeURIComponent(effectiveSelected)}`);
+
+    const selectedOption = options.find(
+      (option) => option.id === effectiveSelected,
+    );
+    if (!selectedOption) {
+      return;
+    }
+
+    router.push(buildBoardUrl(selectedOption));
   };
 
   return (
@@ -102,18 +228,31 @@ export default function ChangeLocationClient({
         {hasCoordinates ? (
           nearbyCount > 0 ? (
             <p className={styles.prompt}>
-              現在地に近いボードのみ表示しています。右側に距離を表示しています。
+              現在地に近いボードと、追加したロケーションを表示しています。
             </p>
           ) : (
             <p className={styles.prompt}>
-              近くのボードが見つかりませんでした。再取得をお試しください。
+              近くのボードが見つかりませんでした。追加したロケーションは表示しています。
             </p>
           )
         ) : (
           <p className={styles.prompt}>
-            現在地から探す場合は「現在地から取得」を押してください。
+            現在地から探す場合は「現在地から取得」を押してください。追加したロケーションは常に表示します。
           </p>
         )}
+        {userLocationCount > 0 ? (
+          <p className={styles.prompt}>
+            マイロケーション: {userLocationCount}件
+          </p>
+        ) : null}
+        {isLoadingUserLocations ? (
+          <p className={styles.prompt}>
+            追加したロケーションを読み込み中です。
+          </p>
+        ) : null}
+        {userLocationsError ? (
+          <p className={styles.prompt}>{userLocationsError}</p>
+        ) : null}
         {isLocating && (
           <p className={styles.prompt}>
             現在地を取得中です。しばらくお待ちください。
@@ -125,7 +264,9 @@ export default function ChangeLocationClient({
           </p>
         )}
         {options.length === 0 ? (
-          <p className={styles.prompt}>近くのロケーションがありません。</p>
+          <p className={styles.prompt}>
+            近くのロケーションと追加ロケーションがありません。
+          </p>
         ) : (
           <ul className={styles.list} role="list">
             {options.map((option) => (
@@ -141,7 +282,8 @@ export default function ChangeLocationClient({
                   <span className={styles.optionContent}>
                     <span className={styles.labelText}>{option.label}</span>
                     <span className={styles.distanceText}>
-                      {option.distanceText ?? ""}
+                      {option.distanceText ??
+                        (option.source === "user" ? "マイ" : "")}
                     </span>
                   </span>
                 </label>

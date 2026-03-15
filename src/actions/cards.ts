@@ -8,9 +8,11 @@ import type {
 } from "./types";
 
 export async function getDailyCardsAction(): Promise<Card[]> {
-  return apiRequest<Card[]>("/cards/daily", {
+  const response = await apiRequest<unknown>("/cards/daily", {
     method: "GET",
   });
+
+  return Array.isArray(response) ? (response as Card[]) : [];
 }
 
 export async function createUserCardAction(
