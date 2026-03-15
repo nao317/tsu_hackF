@@ -2,7 +2,8 @@ import "server-only";
 
 import type { ApiErrorResponse } from "./types";
 
-const DEFAULT_API_BASE_URL = "http://localhost:8080/api/v1";
+const DEFAULT_API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
 type QueryValue = string | number | boolean | null | undefined;
 
