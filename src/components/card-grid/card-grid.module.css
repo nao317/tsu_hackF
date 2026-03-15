@@ -1,0 +1,33 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.card {
+  background: #f2f6ff;
+  border: 1px solid #e3edff;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0a2450;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.full {
+  grid-column: 1 / -1;
+  font-size: 16px;
+  padding: 20px;
+}
+.selected {
+  outline: 3px solid #2b6df6;
+  box-shadow: 0 0 0 2px rgba(43,109,246,0.12) inset;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card { background: #142033; color: #dfefff; border-color: #1f2f44; }
+}

@@ -1,0 +1,20 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #333;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn:active { transform: translateY(1px); }
+
+@media (prefers-color-scheme: dark) {
+  .btn { background:#151515; border-color:#2a2a2a; color:#fff; }
+}

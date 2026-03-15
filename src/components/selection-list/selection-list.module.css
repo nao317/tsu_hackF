@@ -1,0 +1,12 @@
+.container { display:flex; flex-direction:column; gap:8px; }
+.label { margin:0; font-size:13px; color:#444; }
+.row { display:flex; align-items:center; gap:8px; }
+.list { display:flex; gap:8px; flex-wrap:wrap; flex:1; }
+.item { background:#fff6e6; padding:8px 10px; border-radius:10px; font-weight:600; color:#5a3b00; }
+.empty { color:#888; font-size:13px; }
+.removeWrap { display:flex; align-items:center; }
+
+@media (prefers-color-scheme: dark) {
+  .item { background:#3a2a00; color:#ffdca1; }
+  .label, .empty { color:#bdbdbd; }
+}
