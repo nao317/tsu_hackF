@@ -1,67 +1,44 @@
+"use client";
+
 import Image from "next/image";
+// Link removed; using a client-side location button instead
 import styles from "./page.module.css";
+import EditEntry from "../components/edit-entry";
 
 export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
+    
         <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+          <h1>いいかんじのアプリ名</h1>
+          <p>現在地に合わせたカードで素早く発話を支援します。</p>
         </div>
-        <div className={styles.ctas}>
-          <a className={styles.secondary} href="/gps-test">
-            GPS Test Page
-          </a>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <div style={{ display: "flex", gap: 12, flexDirection: "column" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!navigator.geolocation) {
+                alert("位置情報にアクセスできません。");
+                return;
+              }
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  window.location.href = `/board?lat=${latitude}&lng=${longitude}`;
+                },
+                () => {
+                  alert("位置情報を取得できませんでした。");
+                }
+              );
+            }}
+            style={{ display: "inline-block", padding: 12, borderRadius: 8, background: "#0b5cff", color: "white", textAlign: "center", fontWeight: 600 }}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            今の場所からボードを探す
+          </button>
+
+          <EditEntry />
         </div>
       </main>
     </div>
