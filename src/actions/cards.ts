@@ -4,7 +4,6 @@ import { apiRequest } from "./http";
 import type {
   AddCardToUserLocationInput,
   Card,
-  CreateUserCardInput,
   ReorderUserLocationCardsInput,
 } from "./types";
 
@@ -15,13 +14,13 @@ export async function getDailyCardsAction(): Promise<Card[]> {
 }
 
 export async function createUserCardAction(
-  input: CreateUserCardInput,
+  formData: FormData,
   accessToken: string,
 ): Promise<Card> {
   return apiRequest<Card>("/user/cards", {
     method: "POST",
     token: accessToken,
-    body: input,
+    body: formData,
   });
 }
 
