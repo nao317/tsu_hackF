@@ -80,14 +80,6 @@ export type Card = {
   sort_order?: number;
 };
 
-export type CreateUserCardInput = {
-  label: string;
-  image_url?: string;
-  emoji?: string;
-  category?: string;
-  is_daily?: boolean;
-};
-
 export type AddCardToUserLocationInput = {
   card_id: UUID;
   sort_order?: number;
@@ -98,11 +90,6 @@ export type ReorderUserLocationCardsInput = {
     card_id: UUID;
     sort_order: number;
   }>;
-};
-
-export type UploadImageResponse = {
-  url: string;
-  key: string;
 };
 
 export type AiRecommendInput = {
