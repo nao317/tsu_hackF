@@ -32,6 +32,21 @@ function shouldRedirectLogin(message: string): boolean {
   );
 }
 
+const maxImageSizeBytes = 5 * 1024 * 1024;
+const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function validateImageFile(file: File): string | null {
+  if (!allowedImageTypes.has(file.type)) {
+    return "画像はJPEG・PNG・WebPのみ対応しています。";
+  }
+
+  if (file.size > maxImageSizeBytes) {
+    return "画像サイズは5MB以下にしてください。";
+  }
+
+  return null;
+}
+
 export default function CardsPage() {
   const search = useSearchParams();
   const router = useRouter();
@@ -48,10 +63,32 @@ export default function CardsPage() {
     null,
   );
   const [movingCardId, setMovingCardId] = React.useState<string | null>(null);
+  const [imageUpdatingCardId, setImageUpdatingCardId] = React.useState<
+    string | null
+  >(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [newCardLabel, setNewCardLabel] = React.useState("");
   const [newCardEmoji, setNewCardEmoji] = React.useState("");
   const [newCardCategory, setNewCardCategory] = React.useState("");
+  const [newCardImageFile, setNewCardImageFile] = React.useState<File | null>(
+    null,
+  );
+
+  const newCardImagePreview = React.useMemo(() => {
+    if (!newCardImageFile) {
+      return null;
+    }
+
+    return URL.createObjectURL(newCardImageFile);
+  }, [newCardImageFile]);
+
+  React.useEffect(() => {
+    return () => {
+      if (newCardImagePreview) {
+        URL.revokeObjectURL(newCardImagePreview);
+      }
+    };
+  }, [newCardImagePreview]);
 
   const safeLocations = React.useMemo(
     () => (Array.isArray(locations) ? locations : []),
@@ -157,6 +194,8 @@ export default function CardsPage() {
 
   const handleCreateCard = async () => {
     const trimmedLabel = newCardLabel.trim();
+    const selectedImage = newCardImageFile;
+
     if (!selectedLocationId) {
       setErrorMessage("先にロケーションを選択してください。");
       return;
@@ -164,6 +203,14 @@ export default function CardsPage() {
     if (!trimmedLabel) {
       setErrorMessage("カード名を入力してください。");
       return;
+    }
+
+    if (selectedImage) {
+      const validationError = validateImageFile(selectedImage);
+      if (validationError) {
+        setErrorMessage(validationError);
+        return;
+      }
     }
 
     setErrorMessage(null);
@@ -184,6 +231,10 @@ export default function CardsPage() {
           formData.append("category", category);
         }
 
+        if (selectedImage) {
+          formData.append("file", selectedImage);
+        }
+
         return createUserCardAction(formData, accessToken);
       });
 
@@ -202,6 +253,7 @@ export default function CardsPage() {
       setNewCardLabel("");
       setNewCardEmoji("");
       setNewCardCategory("");
+      setNewCardImageFile(null);
     } catch (error) {
       const message = getErrorMessage(error);
       setErrorMessage(message);
@@ -210,6 +262,145 @@ export default function CardsPage() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const createReplacementCard = React.useCallback(
+    async (card: Card, file: File | null) => {
+      return callWithAuthRetry((accessToken) => {
+        const formData = new FormData();
+        formData.append("label", card.label);
+
+        const emoji = card.emoji?.trim() ?? "";
+        if (emoji) {
+          formData.append("emoji", emoji);
+        }
+
+        const category = card.category?.trim() ?? "";
+        if (category) {
+          formData.append("category", category);
+        }
+
+        if (file) {
+          formData.append("file", file);
+        }
+
+        return createUserCardAction(formData, accessToken);
+      });
+    },
+    [],
+  );
+
+  const replaceCardForLocation = React.useCallback(
+    async (
+      locationId: string,
+      sourceCardId: string,
+      replacementCardId: string,
+      sortOrder: number,
+    ) => {
+      await callWithAuthRetry((accessToken) =>
+        addCardToUserLocationAction(
+          locationId,
+          {
+            card_id: replacementCardId,
+            sort_order: sortOrder,
+          },
+          accessToken,
+        ),
+      );
+
+      try {
+        await callWithAuthRetry((accessToken) =>
+          removeCardFromUserLocationAction(
+            locationId,
+            sourceCardId,
+            accessToken,
+          ),
+        );
+      } catch (error) {
+        await callWithAuthRetry((accessToken) =>
+          removeCardFromUserLocationAction(
+            locationId,
+            replacementCardId,
+            accessToken,
+          ),
+        ).catch(() => undefined);
+        throw error;
+      }
+    },
+    [],
+  );
+
+  const handleReplaceCardImage = async (
+    card: Card,
+    sortOrder: number,
+    file: File,
+  ) => {
+    if (!selectedLocationId) {
+      setErrorMessage("先にロケーションを選択してください。");
+      return;
+    }
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    setErrorMessage(null);
+    setImageUpdatingCardId(card.id);
+
+    try {
+      const replacement = await createReplacementCard(card, file);
+      await replaceCardForLocation(
+        selectedLocationId,
+        card.id,
+        replacement.id,
+        sortOrder,
+      );
+      await loadCards(selectedLocationId);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setErrorMessage(message);
+      if (shouldRedirectLogin(message)) {
+        router.replace("/login");
+      }
+    } finally {
+      setImageUpdatingCardId(null);
+    }
+  };
+
+  const handleRemoveCardImage = async (card: Card, sortOrder: number) => {
+    if (!selectedLocationId) {
+      setErrorMessage("先にロケーションを選択してください。");
+      return;
+    }
+
+    if (!card.image_url) {
+      setErrorMessage("このカードには画像が設定されていません。");
+      return;
+    }
+
+    setErrorMessage(null);
+    setImageUpdatingCardId(card.id);
+
+    try {
+      const replacement = await createReplacementCard(card, null);
+      await replaceCardForLocation(
+        selectedLocationId,
+        card.id,
+        replacement.id,
+        sortOrder,
+      );
+      await loadCards(selectedLocationId);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setErrorMessage(message);
+      if (shouldRedirectLogin(message)) {
+        router.replace("/login");
+      }
+    } finally {
+      setImageUpdatingCardId(null);
     }
   };
 
@@ -477,6 +668,72 @@ export default function CardsPage() {
             </button>
           </div>
 
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={isSubmitting}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.currentTarget.value = "";
+
+                if (!file) {
+                  return;
+                }
+
+                const validationError = validateImageFile(file);
+                if (validationError) {
+                  setErrorMessage(validationError);
+                  return;
+                }
+
+                setErrorMessage(null);
+                setNewCardImageFile(file);
+              }}
+            />
+            {newCardImageFile ? (
+              <button
+                onClick={() => {
+                  setNewCardImageFile(null);
+                }}
+                disabled={isSubmitting}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                }}
+              >
+                画像を外す
+              </button>
+            ) : null}
+            {newCardImagePreview ? (
+              <img
+                src={newCardImagePreview}
+                alt="選択中の画像"
+                style={{
+                  width: 56,
+                  height: 56,
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                }}
+              />
+            ) : (
+              <span style={{ color: "#64748b", fontSize: 13 }}>
+                画像を指定しない場合はテキストカードとして保存されます。
+              </span>
+            )}
+          </div>
+
           {addableDailyCards.length > 0 ? (
             <div style={{ marginBottom: 12 }}>
               <p style={{ marginTop: 0, color: "#475569" }}>日常カードを追加</p>
@@ -516,17 +773,108 @@ export default function CardsPage() {
                   marginBottom: 8,
                 }}
               >
-                <span>
-                  {card.emoji ? `${card.emoji} ` : ""}
-                  {card.label}
-                  {card.category ? ` (${card.category})` : ""}
-                </span>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {card.image_url ? (
+                    <img
+                      src={card.image_url}
+                      alt={`${card.label} の画像`}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        border: "1px solid #cbd5e1",
+                        background: "#fff",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 8,
+                        border: "1px dashed #cbd5e1",
+                        color: "#94a3b8",
+                        fontSize: 11,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "#fff",
+                        padding: 4,
+                        textAlign: "center",
+                      }}
+                    >
+                      画像なし
+                    </div>
+                  )}
+                  <span>
+                    {card.emoji ? `${card.emoji} ` : ""}
+                    {card.label}
+                    {card.category ? ` (${card.category})` : ""}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <label
+                    style={{
+                      padding: "6px 8px",
+                      background: "#fef3c7",
+                      borderRadius: 6,
+                      border: "1px solid #fcd34d",
+                      cursor:
+                        isSubmitting || imageUpdatingCardId === card.id
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        isSubmitting || imageUpdatingCardId === card.id
+                          ? 0.6
+                          : 1,
+                    }}
+                  >
+                    {imageUpdatingCardId === card.id
+                      ? "画像更新中..."
+                      : "画像変更"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: "none" }}
+                      disabled={isSubmitting || imageUpdatingCardId === card.id}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        event.currentTarget.value = "";
+
+                        if (!file) {
+                          return;
+                        }
+
+                        void handleReplaceCardImage(card, index, file);
+                      }}
+                    />
+                  </label>
+                  {card.image_url ? (
+                    <button
+                      onClick={() => {
+                        void handleRemoveCardImage(card, index);
+                      }}
+                      disabled={isSubmitting || imageUpdatingCardId === card.id}
+                      style={{
+                        padding: "6px 8px",
+                        background: "#fee2e2",
+                        borderRadius: 6,
+                        border: "1px solid #fca5a5",
+                      }}
+                    >
+                      画像削除
+                    </button>
+                  ) : null}
                   <button
                     onClick={() => {
                       void handleMoveCard(index, -1);
                     }}
-                    disabled={index === 0 || movingCardId === card.id}
+                    disabled={
+                      index === 0 ||
+                      movingCardId === card.id ||
+                      imageUpdatingCardId === card.id
+                    }
                     style={{
                       padding: "6px 8px",
                       background: "#dbeafe",
@@ -541,7 +889,9 @@ export default function CardsPage() {
                       void handleMoveCard(index, 1);
                     }}
                     disabled={
-                      index === safeCards.length - 1 || movingCardId === card.id
+                      index === safeCards.length - 1 ||
+                      movingCardId === card.id ||
+                      imageUpdatingCardId === card.id
                     }
                     style={{
                       padding: "6px 8px",
@@ -556,7 +906,10 @@ export default function CardsPage() {
                     onClick={() => {
                       void handleRemoveCard(card.id);
                     }}
-                    disabled={removingCardId === card.id}
+                    disabled={
+                      removingCardId === card.id ||
+                      imageUpdatingCardId === card.id
+                    }
                     style={{
                       padding: "6px 8px",
                       background: "#ef4444",

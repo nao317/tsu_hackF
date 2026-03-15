@@ -11,10 +11,18 @@ import AiSuggestion from "../../components/ai-suggestion";
 import SpeakButton from "../../components/speak-button";
 import styles from "./board.module.css";
 
-function toCardGridItems(cards: Card[]): Array<{ id: string; label: string }> {
+function toCardGridItems(cards: Card[]): Array<{
+  id: string;
+  label: string;
+  imageUrl?: string;
+}> {
   return cards
     .filter((card) => card.label.trim().length > 0)
-    .map((card) => ({ id: card.id, label: card.label }));
+    .map((card) => ({
+      id: card.id,
+      label: card.label,
+      imageUrl: card.image_url ?? undefined,
+    }));
 }
 
 export default function BoardClient({

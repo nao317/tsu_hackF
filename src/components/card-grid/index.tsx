@@ -3,7 +3,7 @@
 import React from "react";
 import styles from "./card-grid.module.css";
 
-type Card = { id: string; label: string };
+type Card = { id: string; label: string; imageUrl?: string };
 
 export default function CardGrid({ cards = [], fullWidthFirst = false, onSelect, selectedItems = [], }: { cards?: Card[]; fullWidthFirst?: boolean; onSelect?: (label: string) => void; selectedItems?: string[] }) {
   // Default sample cards for demo
@@ -22,12 +22,18 @@ export default function CardGrid({ cards = [], fullWidthFirst = false, onSelect,
           <button
             key={c.id}
             className={`${styles.card} ${fullWidthFirst && idx === 0 ? styles.full : ""} ${isSelected ? styles.selected : ""}`}
-            role="listitem"
             aria-label={c.label}
             aria-pressed={isSelected}
             onClick={() => onSelect?.(c.label)}
           >
-            {c.label}
+            {c.imageUrl ? (
+              <span
+                className={styles.image}
+                aria-hidden="true"
+                style={{ backgroundImage: `url("${c.imageUrl}")` }}
+              />
+            ) : null}
+            <span className={styles.label}>{c.label}</span>
           </button>
         );
       })}
