@@ -1,50 +1,54 @@
-"use client";
+import { getNearbyLocationsAction } from "@/actions/locations";
+import type { Location } from "@/actions/types";
+import ChangeLocationClient from "./change-location-client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
-import styles from "../no-location/no-location.module.css";
+type RawSearchParams = Record<string, string | string[] | undefined>;
 
-const BOARDS = [
-  { id: "convenience", label: "コンビニ" },
-  { id: "hospital", label: "病院" },
-  { id: "cafe", label: "カフェ" },
-];
+function getFirstParam(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+}
 
-export default function ChangeLocationPage() {
-  const router = useRouter();
-  const [selected, setSelected] = useState(BOARDS[0].id);
+function parseCoordinate(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-  const handleConfirm = () => {
-    router.push(`/board?board=${encodeURIComponent(selected)}`);
-  };
+async function fetchNearbyLocations(
+  lat: number,
+  lng: number,
+): Promise<Location[]> {
+  try {
+    const nearby = await getNearbyLocationsAction({ lat, lng });
+    return Array.isArray(nearby) ? nearby : [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function ChangeLocationPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
+  const params = await searchParams;
+  const lat = parseCoordinate(getFirstParam(params.lat));
+  const lng = parseCoordinate(getFirstParam(params.lng));
+  const hasCoordinates = lat !== null && lng !== null;
+
+  const locations = hasCoordinates ? await fetchNearbyLocations(lat, lng) : [];
 
   return (
-    <div className={styles.page}>
-      <h1 className={styles.title}>ロケーションカードを変更</h1>
-
-      <section className={styles.selectArea}>
-        <p className={styles.prompt}>ボードを選択してください</p>
-        <ul className={styles.list} role="list">
-          {BOARDS.map((b) => (
-            <li key={b.id} className={styles.item}>
-              <label>
-                <input
-                  type="radio"
-                  name="board"
-                  value={b.id}
-                  checked={selected === b.id}
-                  onChange={() => setSelected(b.id)}
-                />
-                <span className={styles.labelText}>{b.label}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <div className={styles.actions}>
-        <button className={styles.confirm} onClick={handleConfirm} aria-label="決定">決定</button>
-      </div>
-    </div>
+    <ChangeLocationClient
+      locations={locations}
+      hasCoordinates={hasCoordinates}
+    />
   );
 }
