@@ -86,7 +86,7 @@ export type AddCardToUserLocationInput = {
 };
 
 export type ReorderUserLocationCardsInput = {
-  items: Array<{
+  cards: Array<{
     card_id: UUID;
     sort_order: number;
   }>;

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { getMeAction, loginAction } from "@/actions/auth";
-
-const AUTH_TOKENS_STORAGE_KEY = "auth_tokens";
-const AUTH_USER_STORAGE_KEY = "auth_user";
+import {
+  clearStoredAuth,
+  setStoredAuthTokens,
+  setStoredAuthUser,
+} from "@/lib/authStorage";
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
@@ -39,13 +41,16 @@ export default function LoginForm() {
         password,
       });
 
-      localStorage.setItem(AUTH_TOKENS_STORAGE_KEY, JSON.stringify(tokens));
+      setStoredAuthTokens(tokens);
 
       try {
         const me = await getMeAction(tokens.access_token);
-        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(me));
+        setStoredAuthUser(me);
       } catch {
-        localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+        clearStoredAuth();
+        throw new Error(
+          "ログイン情報の取得に失敗しました。再度お試しください。",
+        );
       }
 
       router.push("/login-form");

@@ -2,7 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { recommendSentenceAction } from "@/actions/ai";
+import { getUserLocationCardsAction } from "@/actions/locations";
 import type { Card } from "@/actions/types";
+import { callWithAuthRetry } from "@/lib/authApiClient";
 import CardGrid from "../../components/card-grid";
 import SelectionList from "../../components/selection-list";
 import AiSuggestion from "../../components/ai-suggestion";
@@ -19,26 +21,81 @@ export default function BoardClient({
   subtitle,
   dailyCards,
   locationCards,
+  locationId,
+  locationType,
   locationName,
 }: {
   subtitle: string;
   dailyCards: Card[];
   locationCards: Card[];
+  locationId?: string;
+  locationType?: "shared" | "user";
   locationName?: string;
 }) {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedAi, setSelectedAi] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState("");
   const [aiError, setAiError] = useState<string | null>(null);
+  const [userLocationCards, setUserLocationCards] = useState<Card[] | null>(
+    null,
+  );
+  const [locationCardsError, setLocationCardsError] = useState<string | null>(
+    null,
+  );
   const requestIdRef = useRef(0);
 
   const dailyCardItems = useMemo(
     () => toCardGridItems(dailyCards),
     [dailyCards],
   );
+
+  useEffect(() => {
+    if (locationType !== "user" || !locationId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const cards = await callWithAuthRetry((accessToken) =>
+          getUserLocationCardsAction(locationId, accessToken),
+        );
+
+        if (!cancelled) {
+          setUserLocationCards(Array.isArray(cards) ? cards : []);
+          setLocationCardsError(null);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setUserLocationCards([]);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "ロケーションカードの取得に失敗しました。";
+        setLocationCardsError(message);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationId, locationType]);
+
+  const locationCardsForDisplay = useMemo(() => {
+    if (locationType === "user") {
+      return userLocationCards ?? [];
+    }
+
+    return Array.isArray(locationCards) ? locationCards : [];
+  }, [locationCards, locationType, userLocationCards]);
+
   const locationCardItems = useMemo(
-    () => toCardGridItems(locationCards),
-    [locationCards],
+    () => toCardGridItems(locationCardsForDisplay),
+    [locationCardsForDisplay],
   );
 
   const handleSelect = (label: string) => {
@@ -133,6 +190,8 @@ export default function BoardClient({
             onSelect={handleSelect}
             selectedItems={selectedItems}
           />
+        ) : locationType === "user" && locationCardsError ? (
+          <p className={styles.empty}>{locationCardsError}</p>
         ) : (
           <p className={styles.empty}>
             このロケーションのカードはまだありません。

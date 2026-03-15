@@ -2,9 +2,107 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import { getMeAction, logoutAction, refreshTokenAction } from "@/actions/auth";
+import {
+  clearStoredAuth,
+  getStoredAuthTokens,
+  setStoredAuthTokens,
+  setStoredAuthUser,
+} from "@/lib/authStorage";
 
 export default function LoginSelectionPage() {
   const router = useRouter();
+  const [isChecking, setIsChecking] = React.useState(true);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [displayName, setDisplayName] = React.useState("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const stored = getStoredAuthTokens();
+
+      if (!stored) {
+        router.replace("/login");
+        return;
+      }
+
+      try {
+        const me = await getMeAction(stored.access_token);
+        if (cancelled) {
+          return;
+        }
+
+        setStoredAuthUser(me);
+        setDisplayName(me.display_name);
+        setIsChecking(false);
+      } catch {
+        try {
+          const refreshed = await refreshTokenAction({
+            refresh_token: stored.refresh_token,
+          });
+
+          if (cancelled) {
+            return;
+          }
+
+          setStoredAuthTokens(refreshed);
+          const me = await getMeAction(refreshed.access_token);
+
+          if (cancelled) {
+            return;
+          }
+
+          setStoredAuthUser(me);
+          setDisplayName(me.display_name);
+          setIsChecking(false);
+        } catch {
+          clearStoredAuth();
+          if (!cancelled) {
+            router.replace("/login");
+          }
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const handleLogout = async () => {
+    const stored = getStoredAuthTokens();
+    setIsLoggingOut(true);
+
+    if (stored) {
+      try {
+        await logoutAction(
+          { refresh_token: stored.refresh_token },
+          stored.access_token,
+        );
+      } catch {
+        // セッション破棄を優先するため、APIエラー時もローカル状態は削除する。
+      }
+    }
+
+    clearStoredAuth();
+    router.replace("/login");
+  };
+
+  if (isChecking) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <p>ログイン状態を確認しています...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -27,6 +125,11 @@ export default function LoginSelectionPage() {
         }}
       >
         <h1 style={{ margin: 0, textAlign: "center" }}>編集メニュー</h1>
+        {displayName ? (
+          <p style={{ margin: 0, color: "#334155" }}>
+            ログイン中: {displayName}
+          </p>
+        ) : null}
 
         <div
           style={{
@@ -64,6 +167,24 @@ export default function LoginSelectionPage() {
             }}
           >
             カード編集
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              void handleLogout();
+            }}
+            disabled={isLoggingOut}
+            style={{
+              padding: 12,
+              borderRadius: 10,
+              background: "#475569",
+              color: "#fff",
+              fontWeight: 700,
+              border: "none",
+            }}
+          >
+            {isLoggingOut ? "ログアウト中..." : "ログアウト"}
           </button>
         </div>
       </div>

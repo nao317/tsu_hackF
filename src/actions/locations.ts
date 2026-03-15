@@ -12,7 +12,7 @@ import type {
 export async function getNearbyLocationsAction(
   params: NearbyLocationsParams,
 ): Promise<Location[]> {
-  return apiRequest<Location[]>("/locations/nearby", {
+  const response = await apiRequest<unknown>("/locations/nearby", {
     method: "GET",
     query: {
       lat: params.lat,
@@ -20,32 +20,40 @@ export async function getNearbyLocationsAction(
       radius_m: params.radius_m,
     },
   });
+
+  return Array.isArray(response) ? (response as Location[]) : [];
 }
 
 export async function getLocationsAction(): Promise<Location[]> {
-  return apiRequest<Location[]>("/locations", {
+  const response = await apiRequest<unknown>("/locations", {
     method: "GET",
   });
+
+  return Array.isArray(response) ? (response as Location[]) : [];
 }
 
 export async function getLocationCardsAction(
   locationId: string,
 ): Promise<Card[]> {
-  return apiRequest<Card[]>(
+  const response = await apiRequest<unknown>(
     `/locations/${encodeURIComponent(locationId)}/cards`,
     {
       method: "GET",
     },
   );
+
+  return Array.isArray(response) ? (response as Card[]) : [];
 }
 
 export async function getUserLocationsAction(
   accessToken: string,
 ): Promise<Location[]> {
-  return apiRequest<Location[]>("/user/locations", {
+  const response = await apiRequest<unknown>("/user/locations", {
     method: "GET",
     token: accessToken,
   });
+
+  return Array.isArray(response) ? (response as Location[]) : [];
 }
 
 export async function createUserLocationAction(
@@ -91,11 +99,13 @@ export async function getUserLocationCardsAction(
   userLocationId: string,
   accessToken: string,
 ): Promise<Card[]> {
-  return apiRequest<Card[]>(
+  const response = await apiRequest<unknown>(
     `/user/locations/${encodeURIComponent(userLocationId)}/cards`,
     {
       method: "GET",
       token: accessToken,
     },
   );
+
+  return Array.isArray(response) ? (response as Card[]) : [];
 }
